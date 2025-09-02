@@ -94,8 +94,12 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 ---
 
 ## Planning Docs
+## Documentation
+- [Step Zero Guide](docs/STEP_ZERO.md)
+- [Week 1 Starter Package](docs/Week1_Starter/)
 - [Vision Doc](docs/planning/Vision_Doc.docx)
 - [Feature List](docs/planning/Feature_List.docx)
+
 
 
 ## Next steps (after you confirm this runs)
