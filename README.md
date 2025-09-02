@@ -1,6 +1,7 @@
-# WinCallem Boilerplate (MVP)
+# WinCallem
 
-This repo gives you a solo‑friendly foundation for a **Next.js + FastAPI + Celery** app with Redis, ready to run locally or via Docker for the backend.
+WinCallem is a no-code sports betting model builder. This repo contains the core
+app (Next.js frontend + FastAPI backend) and documentation for collaborators.
 
 ## What’s inside
 - **apps/web** — Next.js 14 (TypeScript) + Tailwind + shadcn-ready styling, basic pages, simple API client.
