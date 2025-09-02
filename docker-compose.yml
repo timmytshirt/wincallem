@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  api:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    env_file:
+      - ./apps/api/.env
+    ports:
+      - "8000:8000"
+    depends_on:
+      - redis
+
+  worker:
+    build:
+      context: ./apps/api
+      dockerfile: Dockerfile
+    env_file:
+      - ./apps/api/.env
+    command: ["celery", "-A", "celery_app.celery", "worker", "--loglevel=INFO"]
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
