@@ -85,6 +85,11 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 
 ---
 
+## Planning Docs
+- [Vision Doc](docs/planning/Vision_Doc.docx)
+- [Feature List](docs/planning/Feature_List.docx)
+
+
 ## Next steps (after you confirm this runs)
 1. **Auth (Auth.js/NextAuth)** — wire email magic links or OAuth and send JWT to FastAPI for verification.
 2. **Stripe** — subscriptions + webhooks.
