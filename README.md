@@ -17,6 +17,13 @@ This repo gives you a solo‑friendly foundation for a **Next.js + FastAPI + Cel
 
 ---
 
+## For Collaborators (Non-Dev Setup)
+If you’re new to coding, don’t worry — start here:  
+- Go to [`docs/STEP_ZERO.md`](docs/STEP_ZERO.md) → beginner-friendly setup guide  
+- Write your notes in `docs/Setup_Log_[YourName].md`  
+- See `docs/Week1_Starter/` → onboarding PDFs and checklists
+
+
 ## Quick start (local dev)
 
 **Prereqs:** Node 18+, Python 3.11+, Docker (for Redis + API/worker via compose or use local Python).
