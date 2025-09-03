@@ -1,5 +1,7 @@
 import time
+
 from celery_app import celery
+
 
 @celery.task(name="tasks.train_demo_model")
 def train_demo_model(model_name: str, params: dict):
