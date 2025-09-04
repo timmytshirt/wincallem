@@ -1,44 +1,62 @@
 name: CI
 
 on:
-  pull_request:
-    paths-ignore: [ '**/*.md' ]
+  pull_request:          # <-- run on every PR (no paths-ignore here)
   push:
     branches: [ main ]
-    paths-ignore: [ '**/*.md' ]
+    paths-ignore: [ '**/*.md' ]   # ok to ignore md on direct pushes
+
 jobs:
   build-test:
     runs-on: ubuntu-latest
-
     steps:
       - uses: actions/checkout@v4
 
+      # Detect what changed to keep docs-only PRs fast
+      - uses: dorny/paths-filter@v3
+        id: changes
+        with:
+          filters: |
+            docs:
+              - '**/*.md'
+            web:
+              - 'apps/web/**'
+            api:
+              - 'apps/api/**'
+
       # ---------- Web (Next.js) ----------
       - uses: actions/setup-node@v4
+        if: steps.changes.outputs.web == 'true'
         with:
           node-version: 18
       - name: Install web dependencies
+        if: steps.changes.outputs.web == 'true'
         working-directory: apps/web
         run: npm ci
       - name: Build web
+        if: steps.changes.outputs.web == 'true'
         working-directory: apps/web
         run: npm run build
 
       # ---------- API (FastAPI + Python) ----------
       - uses: actions/setup-python@v5
+        if: steps.changes.outputs.api == 'true'
         with:
           python-version: '3.11'
       - name: Install API deps
+        if: steps.changes.outputs.api == 'true'
         run: |
           python -m pip install --upgrade pip
           pip install -r apps/api/requirements.txt -r apps/api/requirements-dev.txt
       - name: Lint & typecheck
+        if: steps.changes.outputs.api == 'true'
         run: |
           black --check apps/api
           isort --check-only apps/api
           flake8 apps/api
           mypy apps/api
       - name: Run tests (if present)
+        if: steps.changes.outputs.api == 'true'
         working-directory: apps/api
         run: |
           if ls -1 test_*.py *_test.py tests 2>/dev/null | grep -q .; then
@@ -46,3 +64,8 @@ jobs:
           else
             echo "No tests found; skipping."
           fi
+
+      # Docs-only PRs still produce a passing check
+      - name: Docs-only change – nothing to build
+        if: steps.changes.outputs.docs == 'true' && steps.changes.outputs.web != 'true' && steps.changes.outputs.api != 'true'
+        run: echo "Docs-only PR; skipping heavy steps."
