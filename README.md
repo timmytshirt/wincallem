@@ -12,8 +12,6 @@ If you’re new to coding, don’t worry — start here:
 - [Step Zero Guide](docs/STEP_ZERO.md) — beginner-friendly setup guide (Windows + Mac)
 - Write your notes in `docs/Setup_Log_[YourName].md`
 - [Week 1 Starter Package](docs/Week1_Starter/) — onboarding PDFs and checklists
-- [Vision Doc](docs/planning/Vision_Doc.docx)
-- [Feature List](docs/planning/Feature_List.docx)
 
 **Your Week 1 goal:**  
 - Run the project locally (backend + frontend via Docker)  
@@ -23,12 +21,20 @@ If you’re new to coding, don’t worry — start here:
 
 ---
 
+## Documentation & Planning
+
+- [Vision Doc](docs/planning/Vision_Doc.docx)
+- [Feature List](docs/planning/Feature_List.docx)
+
+---
+
 ## For Developers (Quick Start with Docker)
 
 This repo gives you a solo-friendly foundation for a **Next.js + FastAPI + Celery** app with Redis.  
 Frontend runs with `npm run dev`; backend services (API + worker + Redis) run via Docker.
 
 ### What’s inside
+
 - **apps/web** — Next.js 14 (TypeScript) + Tailwind + shadcn-ready styling, basic pages, simple API client
 - **apps/api** — FastAPI with:
   - `/health` — healthcheck
@@ -48,6 +54,7 @@ Frontend runs with `npm run dev`; backend services (API + worker + Redis) run vi
 **Prereqs:** Node.js 18+, Docker Desktop
 
 ### 1) Backend (Docker way — recommended)
+
 From the repo root:
 
 ```bash
@@ -58,25 +65,51 @@ copy apps\api\.env.example apps\api\.env
 
 # Build & run API, worker, and Redis
 docker compose up --build
+```
 
-##Developer Setup (with Pre-Commit)
+### 2) Frontend (local dev server)
 
-To keep code style and quality consistent across contributors, we use pre-commit hooks (Black, isort, flake8, mypy)
-### 1)  Install runtime + dev dependencies
 From the repo root:
+
+```bash
+cd apps/web
+npm install
+npm run dev
+```
+
+Visit [http://localhost:3000](http://localhost:3000) for the frontend, [http://localhost:8000](http://localhost:8000) for the API.
+
+---
+
+## Developer Setup (with Pre-Commit)
+
+We use pre-commit to enforce formatting/linting:
+
+```bash
 pip install -r apps/api/requirements.txt -r apps/api/requirements-dev.txt
-
-### 2)  Install pre-commit
 pre-commit install
-This sets up Git hooks so that checks run automatically before every commit.
+pre-commit run --all-files   # optional: run once before first PR
+```
 
-### 3) Run services locally (if needed)
-docker compose up
+Hooks: **black**, **isort**, **flake8**, **mypy**.  
+Fix issues locally, then re-commit.
 
-Web runs on http://localhost:3000
-API runs on http://localhost:8000
-Worker and Redis run in the background
+---
 
-### 4) Commit note
-On the first commit, pre-commit may take a minute while it downloads tools.
-If any checks fail, fix the issues (or let Black/isort auto-fix), then re-stage with git add . and commit again.
+## Next Steps (Roadmap)
+
+After confirming setup:
+
+1. **Auth (Auth.js/NextAuth)** — wire email magic links or OAuth and send JWT to FastAPI for verification.
+2. **Stripe** — subscriptions + webhooks.
+3. **Odds ingestion** — Celery tasks + DuckDB/Parquet storage.
+4. **Model Builder v0** — no-code interface to configure/run jobs.
+5. **Alerts + Exports** — edge > X% notifications, CSV/Parquet export.
+6. **Testing + Polish** — pytest, Playwright, shadcn UI refinements.
+
+---
+
+## Contributing
+
+We welcome contributions from everyone!  
+Please read our [Contributing Guidelines](CONTRIBUTING.md) to learn about branch naming, commit style, and how to get your first PR merged.
