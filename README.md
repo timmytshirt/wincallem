@@ -111,4 +111,5 @@ After confirming setup:
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for branch/commit/PR rules.
+We welcome contributions from everyone!  
+Please read our [Contributing Guidelines](CONTRIBUTING.md) to learn about branch naming, commit style, and how to get your first PR merged.
