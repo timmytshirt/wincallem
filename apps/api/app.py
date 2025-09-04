@@ -1,11 +1,16 @@
 import os
 import time
+from typing import Any, Dict, List, Optional, cast
 
 from celery_app import celery
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from pydantic import BaseModel, ConfigDict, Field
+
+# -----------------------------------------------------------------------------
+# Env / App setup
+# -----------------------------------------------------------------------------
 
 load_dotenv()
 
@@ -25,10 +30,32 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# -----------------------------------------------------------------------------
+# Models
+# -----------------------------------------------------------------------------
+
+
+class GameOdds(BaseModel):
+    game_id: str
+    home: str
+    away: str
+    moneyline_home: int
+    moneyline_away: int
+
 
 class RunModelRequest(BaseModel):
+    # Allow fields like "model_name" without Pydantic's protected namespace warning
+    model_config = ConfigDict(protected_namespaces=())
     model_name: str = "demo-regression"
-    params: dict = {}
+    # Free-form params passed through to the Celery task
+    params: Dict[str, Any] = Field(default_factory=dict)
+    # Optional convenience: include games directly; we’ll merge into params if present
+    games: Optional[List[GameOdds]] = None
+
+
+# -----------------------------------------------------------------------------
+# Endpoints
+# -----------------------------------------------------------------------------
 
 
 @app.get("/health")
@@ -36,39 +63,52 @@ def health():
     return {"status": "ok"}
 
 
-# Simple in-process cache for mocked odds
-_ODDS_CACHE = {"data": None, "ts": 0.0}
+# In-process cache for stubbed odds
+_ODDS_CACHE: Dict[str, Any] = {"data": None, "ts": 0.0}
 
 
-@app.get("/odds")
+@app.get("/odds", response_model=List[GameOdds])
 def odds():
+    """
+    Return a small, deterministic odds stub. Replace with a real fetch later.
+    """
     now = time.time()
     if not _ODDS_CACHE["data"] or now - _ODDS_CACHE["ts"] > 15:
-        # Mocked data; replace with real fetch & Redis/DuckDB caching later
-        _ODDS_CACHE["data"] = [
+        data: List[Dict[str, Any]] = [
             {
-                "game_id": "2025-08-21-NYY-BOS",
+                "game_id": "2025-09-04-NYY-BOS",
                 "home": "Red Sox",
                 "away": "Yankees",
                 "moneyline_home": -120,
                 "moneyline_away": +105,
             },
             {
-                "game_id": "2025-08-21-LAD-SF",
+                "game_id": "2025-09-04-LAD-SF",
                 "home": "Giants",
                 "away": "Dodgers",
                 "moneyline_home": +135,
                 "moneyline_away": -150,
             },
         ]
+        _ODDS_CACHE["data"] = data
         _ODDS_CACHE["ts"] = now
-    return {"updated_at": _ODDS_CACHE["ts"], "odds": _ODDS_CACHE["data"]}
+    else:
+        data = cast(List[Dict[str, Any]], _ODDS_CACHE["data"])
+    return data
 
 
 @app.post("/run_model")
 def run_model(req: RunModelRequest):
-    # Enqueue a Celery job
-    task = celery.send_task("tasks.train_demo_model", args=[req.model_name, req.params])
+    """
+    Enqueue the Celery job. We keep compatibility with the original task signature:
+        train_demo_model(model_name: str, params: dict)
+    If 'games' are provided, they are folded into params under 'games'.
+    """
+    params = dict(req.params)  # shallow copy to avoid mutating the model
+    if req.games:
+        params.setdefault("games", [g.model_dump() for g in req.games])
+
+    task = celery.send_task("tasks.train_demo_model", args=[req.model_name, params])
     return {"task_id": task.id, "status": "queued"}
 
 
@@ -79,8 +119,7 @@ def get_results(task_id: str):
         raise HTTPException(status_code=404, detail="Task not found")
     if result.state == "PENDING":
         return {"task_id": task_id, "state": result.state}
-    elif result.state == "SUCCESS":
+    if result.state == "SUCCESS":
         return {"task_id": task_id, "state": result.state, "result": result.get()}
-    else:
-        # includes STARTED, RETRY, FAILURE
-        return {"task_id": task_id, "state": result.state, "info": str(result.info)}
+    # STARTED, RETRY, FAILURE, etc.
+    return {"task_id": task_id, "state": result.state, "info": str(result.info)}
