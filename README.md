@@ -18,7 +18,7 @@ If you’re new to coding, don’t worry — start here:
 - Confirm the dashboard works (Ping API, Fetch Odds, Run Model Job)  
 - Document your setup in your Setup Log  
 - Make one small contribution (doc edit or UI tweak)
-
+- hi
 ---
 
 ## Documentation & Planning
