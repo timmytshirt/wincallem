@@ -42,7 +42,7 @@ jobs:
       - uses: actions/setup-python@v5
         if: steps.changes.outputs.api == 'true'
         with:
-          python-version: '3.11'
+          python-version: '3.13'
       - name: Install API deps
         if: steps.changes.outputs.api == 'true'
         run: |
