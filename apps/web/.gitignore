@@ -1,0 +1,24 @@
+# Dependencies
+node_modules/
+
+# Next.js build output
+.next/
+out/
+
+# Env / secrets (keep .env.example tracked)
+.env
+.env.local
+.env.*.local
+
+# Prisma local DB (do NOT ignore prisma/migrations/)
+prisma/dev.db
+prisma/*.db-journal
+
+# Generated (if used)
+/app/generated/prisma
+
+# OS / misc
+*.log
+.DS_Store
+Thumbs.db
+
