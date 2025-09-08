@@ -1,3 +1,5 @@
+import ApiHealthBadge from "@/components/ApiHealthBadge";
+
 export const metadata = {
   title: "WinCallem",
   description: "Betting intelligence boilerplate",
@@ -13,6 +15,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             <a className="text-sm underline" href="/dashboard">Dashboard</a>
           </nav>
           {children}
+          <ApiHealthBadge />
         </div>
       </body>
     </html>
