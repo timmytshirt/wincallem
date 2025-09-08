@@ -17,6 +17,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
               <h1 className="text-2xl font-bold">WinCallem</h1>
               <div className="flex items-center gap-4">
                 <a className="text-sm underline" href="/dashboard">Dashboard</a>
+                <a className="text-sm underline" href="/protected">Pro Page</a>
                 <AuthButtons />
               </div>
             </nav>
