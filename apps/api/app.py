@@ -1,12 +1,11 @@
 import os
 import time
-from typing import Any, Dict, List, Optional, cast
+from typing import Any, Dict, List, cast
 
-from celery_app import celery
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel
 
 # -----------------------------------------------------------------------------
 # Env / App setup
@@ -36,21 +35,25 @@ app.add_middleware(
 
 
 class GameOdds(BaseModel):
+    # identifiers
     game_id: str
     home: str
     away: str
+
+    # moneyline
     moneyline_home: int
     moneyline_away: int
 
+    # spread (line + odds per side)
+    spread_home_line: float
+    spread_home_odds: int
+    spread_away_line: float
+    spread_away_odds: int
 
-class RunModelRequest(BaseModel):
-    # Allow fields like "model_name" without Pydantic's protected namespace warning
-    model_config = ConfigDict(protected_namespaces=())
-    model_name: str = "demo-regression"
-    # Free-form params passed through to the Celery task
-    params: Dict[str, Any] = Field(default_factory=dict)
-    # Optional convenience: include games directly; we’ll merge into params if present
-    games: Optional[List[GameOdds]] = None
+    # total (shared line + O/U odds)
+    total_line: float
+    total_over_odds: int
+    total_under_odds: int
 
 
 # -----------------------------------------------------------------------------
@@ -81,6 +84,15 @@ def odds():
                 "away": "Yankees",
                 "moneyline_home": -120,
                 "moneyline_away": +105,
+                # Spread (example: BOS -1.5, NYY +1.5)
+                "spread_home_line": -1.5,
+                "spread_home_odds": +150,
+                "spread_away_line": +1.5,
+                "spread_away_odds": -170,
+                # Total (example: 8.5 with symmetric juice)
+                "total_line": 8.5,
+                "total_over_odds": -110,
+                "total_under_odds": -110,
             },
             {
                 "game_id": "2025-09-04-LAD-SF",
@@ -88,6 +100,15 @@ def odds():
                 "away": "Dodgers",
                 "moneyline_home": +135,
                 "moneyline_away": -150,
+                # Spread (example: SF +1.5, LAD -1.5)
+                "spread_home_line": +1.5,
+                "spread_home_odds": -155,
+                "spread_away_line": -1.5,
+                "spread_away_odds": +140,
+                # Total
+                "total_line": 7.5,
+                "total_over_odds": -108,
+                "total_under_odds": -112,
             },
         ]
         _ODDS_CACHE["data"] = data
@@ -95,31 +116,3 @@ def odds():
     else:
         data = cast(List[Dict[str, Any]], _ODDS_CACHE["data"])
     return data
-
-
-@app.post("/run_model")
-def run_model(req: RunModelRequest):
-    """
-    Enqueue the Celery job. We keep compatibility with the original task signature:
-        train_demo_model(model_name: str, params: dict)
-    If 'games' are provided, they are folded into params under 'games'.
-    """
-    params = dict(req.params)  # shallow copy to avoid mutating the model
-    if req.games:
-        params.setdefault("games", [g.model_dump() for g in req.games])
-
-    task = celery.send_task("tasks.train_demo_model", args=[req.model_name, params])
-    return {"task_id": task.id, "status": "queued"}
-
-
-@app.get("/results/{task_id}")
-def get_results(task_id: str):
-    result = celery.AsyncResult(task_id)
-    if not result:
-        raise HTTPException(status_code=404, detail="Task not found")
-    if result.state == "PENDING":
-        return {"task_id": task_id, "state": result.state}
-    if result.state == "SUCCESS":
-        return {"task_id": task_id, "state": result.state, "result": result.get()}
-    # STARTED, RETRY, FAILURE, etc.
-    return {"task_id": task_id, "state": result.state, "info": str(result.info)}
