@@ -1,6 +1,6 @@
 ﻿import NextAuth from "next-auth";
 // ✅ correct path
-import { authOptions } from "@/lib/auth";
+import { authOptions } from "@/app/lib/auth";
 
 // nodemailer needs Node, not Edge
 export const runtime = "nodejs";
