@@ -17,3 +17,9 @@
 *.pdf  binary
 *.docx binary
 *.xlsx binary
+
+# Keep Windows endings only for Windows scripts
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
