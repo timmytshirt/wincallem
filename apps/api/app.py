@@ -2,15 +2,15 @@ import os
 import time
 from typing import Any, Dict, List, cast
 
+import jwt
 from dotenv import load_dotenv
-from fastapi import FastAPI
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # -----------------------------------------------------------------------------
 # Env / App setup
 # -----------------------------------------------------------------------------
-
 load_dotenv()
 
 API_HOST = os.getenv("API_HOST", "0.0.0.0")
@@ -18,6 +18,7 @@ API_PORT = int(os.getenv("API_PORT", "8000"))
 CORS_ORIGINS = [
     o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 ]
+AUTH_SECRET = os.getenv("AUTH_SECRET")
 
 app = FastAPI(title="WinCallem API", version="0.1.0")
 
@@ -29,11 +30,33 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# -----------------------------------------------------------------------------
+# Auth guard
+# -----------------------------------------------------------------------------
+def verify_jwt(req: Request):
+    auth = req.headers.get("authorization")
+    if not auth or not auth.lower().startswith("bearer "):
+        raise HTTPException(status_code=401, detail="Missing Bearer token")
+    token = auth.split(" ", 1)[1]
+    if not AUTH_SECRET:
+        raise HTTPException(status_code=500, detail="AUTH_SECRET not set on API")
+    try:
+        # Accept common HMAC algs used by NextAuth; skip audience check
+        payload = jwt.decode(
+            token,
+            AUTH_SECRET,
+            algorithms=["HS256", "HS384", "HS512"],
+            options={"verify_aud": False},
+        )
+        return payload  # contains sub, email, name, etc. from NextAuth
+    except Exception as e:
+        raise HTTPException(status_code=401, detail=f"Invalid token: {e}")
+
+
 # -----------------------------------------------------------------------------
 # Models
 # -----------------------------------------------------------------------------
-
-
 class GameOdds(BaseModel):
     # identifiers
     game_id: str
@@ -57,24 +80,12 @@ class GameOdds(BaseModel):
 
 
 # -----------------------------------------------------------------------------
-# Endpoints
+# Odds stub (shared by public and secure endpoints)
 # -----------------------------------------------------------------------------
-
-
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-
-# In-process cache for stubbed odds
 _ODDS_CACHE: Dict[str, Any] = {"data": None, "ts": 0.0}
 
 
-@app.get("/odds", response_model=List[GameOdds])
-def odds():
-    """
-    Return a small, deterministic odds stub. Replace with a real fetch later.
-    """
+def get_stub_odds() -> List[Dict[str, Any]]:
     now = time.time()
     if not _ODDS_CACHE["data"] or now - _ODDS_CACHE["ts"] > 15:
         data: List[Dict[str, Any]] = [
@@ -113,6 +124,30 @@ def odds():
         ]
         _ODDS_CACHE["data"] = data
         _ODDS_CACHE["ts"] = now
-    else:
-        data = cast(List[Dict[str, Any]], _ODDS_CACHE["data"])
-    return data
+    return cast(List[Dict[str, Any]], _ODDS_CACHE["data"])
+
+
+# -----------------------------------------------------------------------------
+# Endpoints
+# -----------------------------------------------------------------------------
+@app.get("/health")
+def health():
+    return {"status": "ok"}
+
+
+# Public odds (no auth)
+@app.get("/odds", response_model=List[GameOdds])
+def odds():
+    return get_stub_odds()
+
+
+# Secure odds (JWT required)
+@app.get("/odds/secure", response_model=List[GameOdds])
+def odds_secure(user=Depends(verify_jwt)):
+    return get_stub_odds()
+
+
+# Simple protected route to test JWT wiring
+@app.get("/protected")
+def protected(user=Depends(verify_jwt)):
+    return {"ok": True, "sub": user.get("sub"), "email": user.get("email")}
