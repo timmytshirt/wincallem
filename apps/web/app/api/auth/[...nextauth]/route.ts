@@ -6,7 +6,6 @@ import CredentialsProvider from "next-auth/providers/credentials";
 
 const handler = NextAuth({
   secret: process.env.NEXTAUTH_SECRET,
-  trustHost: true,
   session: { strategy: "jwt" },
   providers: [
     CredentialsProvider({
