@@ -55,7 +55,6 @@ export function buildAuthOptions(): NextAuthOptions {
 
   const opts: NextAuthOptions = {
     secret: process.env.NEXTAUTH_SECRET,
-    trustHost: true,
     session: { strategy: "jwt" },
     providers,
   };
