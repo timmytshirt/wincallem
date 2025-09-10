@@ -18,7 +18,7 @@ API_PORT = int(os.getenv("API_PORT", "8000"))
 CORS_ORIGINS = [
     o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 ]
-AUTH_SECRET = os.getenv("AUTH_SECRET")  # MUST equal NEXTAUTH_SECRET in the web app
+AUTH_SECRET = os.getenv("AUTH_SECRET") or os.getenv("NEXTAUTH_SECRET")
 
 app = FastAPI(title="WinCallem API", version="0.1.0")
 
