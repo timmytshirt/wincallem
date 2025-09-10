@@ -32,7 +32,7 @@ jobs:
       - name: Install web dependencies
         if: steps.changes.outputs.web == 'true'
         working-directory: apps/web
-        run: npm ci
+        run: npm install --force
       - name: Build web
         if: steps.changes.outputs.web == 'true'
         working-directory: apps/web
