@@ -4,9 +4,10 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")             // pooled (runtime)
-  directUrl = env("DATABASE_URL_UNPOOLED")    // direct (migrate/studio)
+  url       = env("DATABASE_URL")          // pooled @ Neon (pgbouncer=true)
+  directUrl = env("DIRECT_DATABASE_URL")   // direct for migrate/studio
 }
+
 
 model User {
   id            String   @id @default(cuid())
