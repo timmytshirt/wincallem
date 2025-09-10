@@ -1,22 +1,18 @@
 import type { NextAuthOptions } from "next-auth";
 import Email from "next-auth/providers/email";
 import { PrismaAdapter } from "@auth/prisma-adapter";
-import { PrismaClient } from "@prisma/client";
+import { prisma } from "./prisma";              // <— use the injected client
 import { createTransport } from "nodemailer";
-
-const prisma = globalThis.prisma ?? new PrismaClient();
-if (process.env.NODE_ENV !== "production") (globalThis as any).prisma = prisma;
 
 export const authOptions: NextAuthOptions = {
   secret: process.env.NEXTAUTH_SECRET,
   trustHost: true,
   session: { strategy: "jwt" },
-  adapter: PrismaAdapter(prisma),
+  adapter: PrismaAdapter(prisma) as any,        // Auth.js adapter expects any
   providers: [
     Email({
       server: process.env.EMAIL_SERVER,
       from: process.env.EMAIL_FROM,
-      // Dev-friendly: log the magic link if LOG_MAGIC_LINKS=1
       async sendVerificationRequest({ identifier, url, provider }) {
         if (process.env.LOG_MAGIC_LINKS === "1") {
           console.log("\n🔗 Magic sign-in link for", identifier, ":\n", url, "\n");
