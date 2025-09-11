@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { stripe } from "@/lib/stripe";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from "@/app/lib/auth";
 import { PrismaClient } from "@prisma/client";
 
 export const runtime = "nodejs";

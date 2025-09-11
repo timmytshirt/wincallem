@@ -2,7 +2,7 @@
 
 import AccountPlan from "@/components/AccountPlan";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/lib/auth";   // ✅ fixed: use @/lib, not @/app/lib
+import { authOptions } from "@/app/lib/auth";
 import { headers } from "next/headers";
 
 export default async function AccountPage() {

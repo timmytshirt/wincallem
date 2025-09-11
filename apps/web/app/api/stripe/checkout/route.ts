@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { authOptions } from "@/lib/auth";
+import { authOptions } from "@/app/lib/auth";
 import { stripe, siteUrl } from "@/lib/stripe";
 import { getServerSession } from "next-auth";
 
