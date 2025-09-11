@@ -2,9 +2,9 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/lib/auth";      // ✅ your authOptions lives under app/lib
+import { authOptions } from "@/app/lib/auth";
 import { PrismaClient } from "@prisma/client";
-import { stripe } from "@/lib/stripe";             // ✅ use shared helper, not a new instance
+import { getStripe } from "@/lib/stripe";   // ✅ lazy init
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -19,6 +19,8 @@ export async function POST(_req: NextRequest) {
   if (!email || !uid) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+
+  const stripe = getStripe(); // ✅ init at runtime
 
   const customers = await stripe.customers.list({ email, limit: 1 });
   const customer = customers.data[0];
