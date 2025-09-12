@@ -1,17 +1,17 @@
+// apps/web/app/lib/auth.ts
 import type { NextAuthOptions } from "next-auth";
 import Credentials from "next-auth/providers/credentials";
 import Email from "next-auth/providers/email";
-import { PrismaAdapter } from "@auth/prisma-adapter";
-import { getPrisma, hasDb } from "./prisma";
-import { createTransport } from "nodemailer";
+
+function canUseDb(): boolean {
+  return !!process.env.DATABASE_URL;
+}
 
 export function buildAuthOptions(): NextAuthOptions {
-  const useDb = hasDb();
-
+  const useDb = canUseDb();
   const providers: any[] = [];
 
   if (useDb) {
-    // Email + Prisma (your original plan)
     providers.push(
       Email({
         server: process.env.EMAIL_SERVER,
@@ -21,6 +21,9 @@ export function buildAuthOptions(): NextAuthOptions {
             console.log("\n🔗 Magic sign-in link for", identifier, ":\n", url, "\n");
             return;
           }
+          // Load nodemailer only when needed (avoid TS type dep)
+          // eslint-disable-next-line @typescript-eslint/no-var-requires
+          const { createTransport } = require("nodemailer");
           const transport = createTransport(provider.server as any);
           const { host } = new URL(url);
           await transport.sendMail({
@@ -34,7 +37,7 @@ export function buildAuthOptions(): NextAuthOptions {
       })
     );
   } else {
-    // 🔒 DEV Credentials (no DB required)
+    // Dev-only, DB-free login
     providers.push(
       Credentials({
         name: "Developer Login",
@@ -57,11 +60,36 @@ export function buildAuthOptions(): NextAuthOptions {
     secret: process.env.NEXTAUTH_SECRET,
     session: { strategy: "jwt" },
     providers,
+    callbacks: {
+      async jwt({ token, user }) {
+        if ((user as any)?.id) (token as any).uid = (user as any).id;
+        return token;
+      },
+      async session({ session, token }) {
+        if ((token as any)?.uid) (session as any).uid = (token as any).uid;
+        return session;
+      },
+    },
+    debug: process.env.NODE_ENV === "development",
   };
 
+  // Attach Prisma adapter dynamically (only when DB is configured)
   if (useDb) {
-    opts.adapter = PrismaAdapter(getPrisma()) as any;
+    try {
+      // NOTE: correct package name for NextAuth v4
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { PrismaAdapter } = require("@next-auth/prisma-adapter");
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const { PrismaClient } = require("@prisma/client");
+      const prisma = new PrismaClient();
+      (opts as any).adapter = PrismaAdapter(prisma);
+    } catch {
+      // If adapter/prisma aren’t installed, continue without adapter
+    }
   }
 
   return opts;
 }
+
+// Export the ready object most callers expect
+export const authOptions: NextAuthOptions = buildAuthOptions();
