@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Any, Dict, List, cast
+from typing import Any, Dict, List, Optional, Set, cast
 
 import jwt
 from dotenv import load_dotenv
@@ -18,7 +18,9 @@ API_PORT = int(os.getenv("API_PORT", "8000"))
 CORS_ORIGINS = [
     o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 ]
-AUTH_SECRET = os.getenv("AUTH_SECRET") or os.getenv("NEXTAUTH_SECRET")
+
+# NOTE: Don't raise at import time; CI doesn't set this for non-auth tests.
+AUTH_SECRET: Optional[str] = os.getenv("AUTH_SECRET") or os.getenv("NEXTAUTH_SECRET")
 
 app = FastAPI(title="WinCallem API", version="0.1.0")
 
@@ -34,34 +36,42 @@ app.add_middleware(
 # -----------------------------------------------------------------------------
 # Auth guard
 # -----------------------------------------------------------------------------
-def verify_jwt(req: Request):
+def verify_jwt(req: Request) -> Dict[str, Any]:
     auth = req.headers.get("authorization")
     if not auth or not auth.lower().startswith("bearer "):
         raise HTTPException(status_code=401, detail="Missing Bearer token")
 
     token = auth.split(" ", 1)[1]
 
-    if not AUTH_SECRET:
-        raise HTTPException(status_code=500, detail="AUTH_SECRET not set on API")
-
     try:
-        # Read the header first to discover which HMAC alg was used by NextAuth
+        # Read header to determine algorithm
         header = jwt.get_unverified_header(token)
-        alg = header.get("alg")
+        alg_val = header.get("alg")
+        if not isinstance(alg_val, str):
+            raise HTTPException(status_code=401, detail="Invalid token header: alg")
 
-        # Accept common HMAC algorithms used by NextAuth v4 (Credentials, etc.)
-        allowed_algs = {"HS256", "HS384", "HS512"}
-        if alg not in allowed_algs:
-            raise HTTPException(status_code=401, detail=f"Invalid token alg: {alg}")
+        # Only allow common HMAC algs (used by NextAuth v4)
+        allowed_algs: Set[str] = {"HS256", "HS384", "HS512"}
+        if alg_val not in allowed_algs:
+            raise HTTPException(status_code=401, detail=f"Invalid token alg: {alg_val}")
 
-        # Verify signature using the discovered algorithm; skip 'aud' check
-        payload = jwt.decode(
+        # Require secret only when verifying JWTs
+        if AUTH_SECRET is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Server misconfigured: AUTH_SECRET/NEXTAUTH_SECRET is not set",
+            )
+        secret: str = AUTH_SECRET  # type-narrowing for mypy
+
+        # Verify signature, skip 'aud' check, allow small clock skew
+        payload: Dict[str, Any] = jwt.decode(
             token,
-            AUTH_SECRET,
-            algorithms=[alg],
+            secret,
+            algorithms=[alg_val],
             options={"verify_aud": False},
+            leeway=30,
         )
-        return payload  # contains sub/email/etc.
+        return payload
     except HTTPException:
         raise
     except jwt.ExpiredSignatureError:
@@ -136,20 +146,20 @@ def get_stub_odds() -> List[Dict[str, Any]]:
 # Endpoints
 # -----------------------------------------------------------------------------
 @app.get("/health")
-def health():
+def health() -> Dict[str, str]:
     return {"status": "ok"}
 
 
 @app.get("/odds", response_model=List[GameOdds])
-def odds():
+def odds() -> List[Dict[str, Any]]:
     return get_stub_odds()
 
 
 @app.get("/odds/secure", response_model=List[GameOdds])
-def odds_secure(user=Depends(verify_jwt)):
+def odds_secure(user: Dict[str, Any] = Depends(verify_jwt)) -> List[Dict[str, Any]]:
     return get_stub_odds()
 
 
 @app.get("/protected")
-def protected(user=Depends(verify_jwt)):
+def protected(user: Dict[str, Any] = Depends(verify_jwt)) -> Dict[str, Any]:
     return {"ok": True, "sub": user.get("sub"), "email": user.get("email")}

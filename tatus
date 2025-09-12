@@ -1,0 +1,60 @@
+[1mdiff --git a/apps/api/app.py b/apps/api/app.py[m
+[1mindex 6a5f065..bdf6321 100644[m
+[1m--- a/apps/api/app.py[m
+[1m+++ b/apps/api/app.py[m
+[36m@@ -32,6 +32,7 @@[m [mapp.add_middleware([m
+     allow_headers=["*"],[m
+ )[m
+ [m
+[32m+[m
+ # -----------------------------------------------------------------------------[m
+ # Auth guard[m
+ # -----------------------------------------------------------------------------[m
+[36m@@ -78,6 +79,7 @@[m [mdef verify_jwt(req: Request) -> Dict[str, Any]:[m
+     except Exception as e:[m
+         raise HTTPException(status_code=401, detail=f"Invalid token: {e}")[m
+ [m
+[32m+[m
+ # -----------------------------------------------------------------------------[m
+ # Models[m
+ # -----------------------------------------------------------------------------[m
+[36m@@ -95,11 +97,13 @@[m [mclass GameOdds(BaseModel):[m
+     total_over_odds: int[m
+     total_under_odds: int[m
+ [m
+[32m+[m
+ # -----------------------------------------------------------------------------[m
+ # Odds stub (shared by public and secure endpoints)[m
+ # -----------------------------------------------------------------------------[m
+ _ODDS_CACHE: Dict[str, Any] = {"data": None, "ts": 0.0}[m
+ [m
+[32m+[m
+ def get_stub_odds() -> List[Dict[str, Any]]:[m
+     now = time.time()[m
+     if not _ODDS_CACHE["data"] or now - _ODDS_CACHE["ts"] > 15:[m
+[36m@@ -137,6 +141,7 @@[m [mdef get_stub_odds() -> List[Dict[str, Any]]:[m
+         _ODDS_CACHE["ts"] = now[m
+     return cast(List[Dict[str, Any]], _ODDS_CACHE["data"])[m
+ [m
+[32m+[m
+ # -----------------------------------------------------------------------------[m
+ # Endpoints[m
+ # -----------------------------------------------------------------------------[m
+[36m@@ -144,14 +149,17 @@[m [mdef get_stub_odds() -> List[Dict[str, Any]]:[m
+ def health() -> Dict[str, str]:[m
+     return {"status": "ok"}[m
+ [m
+[32m+[m
+ @app.get("/odds", response_model=List[GameOdds])[m
+ def odds() -> List[Dict[str, Any]]:[m
+     return get_stub_odds()[m
+ [m
+[32m+[m
+ @app.get("/odds/secure", response_model=List[GameOdds])[m
+ def odds_secure(user: Dict[str, Any] = Depends(verify_jwt)) -> List[Dict[str, Any]]:[m
+     return get_stub_odds()[m
+ [m
+[32m+[m
+ @app.get("/protected")[m
+ def protected(user: Dict[str, Any] = Depends(verify_jwt)) -> Dict[str, Any]:[m
+     return {"ok": True, "sub": user.get("sub"), "email": user.get("email")}[m
