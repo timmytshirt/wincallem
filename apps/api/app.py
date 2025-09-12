@@ -20,6 +20,9 @@ CORS_ORIGINS = [
 ]
 AUTH_SECRET = os.getenv("AUTH_SECRET") or os.getenv("NEXTAUTH_SECRET")
 
+if not AUTH_SECRET:
+    raise RuntimeError("AUTH_SECRET/NEXTAUTH_SECRET is not set in the environment")
+
 app = FastAPI(title="WinCallem API", version="0.1.0")
 
 app.add_middleware(
@@ -41,27 +44,25 @@ def verify_jwt(req: Request):
 
     token = auth.split(" ", 1)[1]
 
-    if not AUTH_SECRET:
-        raise HTTPException(status_code=500, detail="AUTH_SECRET not set on API")
-
     try:
-        # Read the header first to discover which HMAC alg was used by NextAuth
+        # Read header to determine algorithm
         header = jwt.get_unverified_header(token)
         alg = header.get("alg")
 
-        # Accept common HMAC algorithms used by NextAuth v4 (Credentials, etc.)
+        # Only allow common HMAC algs (used by NextAuth v4)
         allowed_algs = {"HS256", "HS384", "HS512"}
         if alg not in allowed_algs:
             raise HTTPException(status_code=401, detail=f"Invalid token alg: {alg}")
 
-        # Verify signature using the discovered algorithm; skip 'aud' check
+        # Verify signature, skip 'aud' check, allow small clock skew
         payload = jwt.decode(
             token,
             AUTH_SECRET,
             algorithms=[alg],
             options={"verify_aud": False},
+            leeway=30,
         )
-        return payload  # contains sub/email/etc.
+        return payload
     except HTTPException:
         raise
     except jwt.ExpiredSignatureError:
