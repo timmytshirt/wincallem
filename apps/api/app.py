@@ -1,6 +1,6 @@
 import os
 import time
-from typing import Any, Dict, Final, List, Optional, Set, cast
+from typing import Any, Dict, List, Optional, Set, cast
 
 import jwt
 from dotenv import load_dotenv
@@ -19,11 +19,8 @@ CORS_ORIGINS = [
     o.strip() for o in os.getenv("CORS_ORIGINS", "http://localhost:3000").split(",")
 ]
 
-# Make secret non-optional at type-check time (mypy-safe)
-_AUTH_SECRET: Optional[str] = os.getenv("AUTH_SECRET") or os.getenv("NEXTAUTH_SECRET")
-if not _AUTH_SECRET:
-    raise RuntimeError("AUTH_SECRET/NEXTAUTH_SECRET is not set in the environment")
-AUTH_SECRET: Final[str] = cast(str, _AUTH_SECRET)
+# NOTE: Don't raise at import time; CI doesn't set this for non-auth tests.
+AUTH_SECRET: Optional[str] = os.getenv("AUTH_SECRET") or os.getenv("NEXTAUTH_SECRET")
 
 app = FastAPI(title="WinCallem API", version="0.1.0")
 
@@ -58,10 +55,18 @@ def verify_jwt(req: Request) -> Dict[str, Any]:
         if alg_val not in allowed_algs:
             raise HTTPException(status_code=401, detail=f"Invalid token alg: {alg_val}")
 
+        # Require secret only when verifying JWTs
+        if AUTH_SECRET is None:
+            raise HTTPException(
+                status_code=500,
+                detail="Server misconfigured: AUTH_SECRET/NEXTAUTH_SECRET is not set",
+            )
+        secret: str = AUTH_SECRET  # type-narrowing for mypy
+
         # Verify signature, skip 'aud' check, allow small clock skew
         payload: Dict[str, Any] = jwt.decode(
             token,
-            AUTH_SECRET,
+            secret,
             algorithms=[alg_val],
             options={"verify_aud": False},
             leeway=30,
