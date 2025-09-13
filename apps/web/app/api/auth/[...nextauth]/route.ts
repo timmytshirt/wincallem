@@ -2,37 +2,29 @@
 export const dynamic = "force-dynamic";
 
 import NextAuth from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
+import EmailProvider from "next-auth/providers/email";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
+import { prisma } from "@/lib/prisma"; // change to a relative path if '@' alias isn't set
 
 const handler = NextAuth({
   secret: process.env.NEXTAUTH_SECRET,
-  session: { strategy: "jwt" },
+  trustHost: true,
+  debug: process.env.NEXTAUTH_DEBUG === "true",
+  session: { strategy: "jwt" },              // fine; adapter is still required for email
+  adapter: PrismaAdapter(prisma),             // <-- THIS fixes EMAIL_REQUIRES_ADAPTER_ERROR
   providers: [
-    CredentialsProvider({
-      name: "Developer Login",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Dev Password", type: "password" },
+    EmailProvider({
+      server: {
+        host: process.env.MAILTRAP_HOST!,
+        port: Number(process.env.MAILTRAP_PORT ?? "2525"),
+        auth: {
+          user: process.env.MAILTRAP_USER!,
+          pass: process.env.MAILTRAP_PASS!,
+        },
       },
-      async authorize(c) {
-        if (!c?.password) return null;
-        // DEV password set in .env
-        return c.password === process.env.DEV_PASSWORD
-          ? { id: "dev-user", name: "Dev User", email: String(c.email || "dev@local") }
-          : null;
-      },
+      from: process.env.EMAIL_FROM!,
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user && token.plan === undefined) token.plan = null;
-      return token;
-    },
-    async session({ session, token }) {
-      (session.user as any).plan = (token as any).plan ?? null;
-      return session;
-    },
-  },
 });
 
 export { handler as GET, handler as POST };
