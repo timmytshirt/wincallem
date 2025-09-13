@@ -1,38 +1,21 @@
-﻿export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+﻿import NextAuth from "next-auth";
+import EmailProvider from "next-auth/providers/email";
+import { PrismaAdapter } from "@next-auth/prisma-adapter";
+// apps/web/app/api/auth/[...nextauth]/route.ts
+import { prisma } from "../../../../lib/prisma";
 
-import NextAuth from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
 
 const handler = NextAuth({
   secret: process.env.NEXTAUTH_SECRET,
+  debug: process.env.NEXTAUTH_DEBUG === "true",
   session: { strategy: "jwt" },
+  adapter: PrismaAdapter(prisma),
   providers: [
-    CredentialsProvider({
-      name: "Developer Login",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Dev Password", type: "password" },
-      },
-      async authorize(c) {
-        if (!c?.password) return null;
-        // DEV password set in .env
-        return c.password === process.env.DEV_PASSWORD
-          ? { id: "dev-user", name: "Dev User", email: String(c.email || "dev@local") }
-          : null;
-      },
+    EmailProvider({
+      server: process.env.EMAIL_SERVER,
+      from: process.env.EMAIL_FROM,
     }),
   ],
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user && token.plan === undefined) token.plan = null;
-      return token;
-    },
-    async session({ session, token }) {
-      (session.user as any).plan = (token as any).plan ?? null;
-      return session;
-    },
-  },
 });
 
 export { handler as GET, handler as POST };
