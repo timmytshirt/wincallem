@@ -21,7 +21,7 @@ export function buildAuthOptions(): NextAuthOptions {
             console.log("\n🔗 Magic sign-in link for", identifier, ":\n", url, "\n");
             return;
           }
-          // Load nodemailer only when needed (avoid TS type dep)
+          // Lazy import nodemailer to avoid type deps
           // eslint-disable-next-line @typescript-eslint/no-var-requires
           const { createTransport } = require("nodemailer");
           const transport = createTransport(provider.server as any);
@@ -37,7 +37,6 @@ export function buildAuthOptions(): NextAuthOptions {
       })
     );
   } else {
-    // Dev-only, DB-free login
     providers.push(
       Credentials({
         name: "Developer Login",
@@ -62,11 +61,20 @@ export function buildAuthOptions(): NextAuthOptions {
     providers,
     callbacks: {
       async jwt({ token, user }) {
-        if ((user as any)?.id) (token as any).uid = (user as any).id;
+        if (user && (user as any).id) {
+          (token as any).uid = (user as any).id;
+        }
+        (token as any).uid = (token as any).uid || token.sub || null;
         return token;
       },
-      async session({ session, token }) {
-        if ((token as any)?.uid) (session as any).uid = (token as any).uid;
+      async session({ session, token, user }) {
+        const idFromUser = (user as any)?.id as string | undefined;
+        const idFromToken = (token as any)?.uid || token.sub;
+        if (session.user) {
+          (session.user as any).id = idFromUser || idFromToken || null;
+        }
+        // keep your existing `session.uid` for back-compat
+        (session as any).uid = (session.user as any)?.id || null;
         return session;
       },
     },
@@ -76,7 +84,6 @@ export function buildAuthOptions(): NextAuthOptions {
   // Attach Prisma adapter dynamically (only when DB is configured)
   if (useDb) {
     try {
-      // NOTE: correct package name for NextAuth v4
       // eslint-disable-next-line @typescript-eslint/no-var-requires
       const { PrismaAdapter } = require("@next-auth/prisma-adapter");
       // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -84,12 +91,11 @@ export function buildAuthOptions(): NextAuthOptions {
       const prisma = new PrismaClient();
       (opts as any).adapter = PrismaAdapter(prisma);
     } catch {
-      // If adapter/prisma aren’t installed, continue without adapter
+      // ignore if prisma not installed
     }
   }
 
   return opts;
 }
 
-// Export the ready object most callers expect
 export const authOptions: NextAuthOptions = buildAuthOptions();

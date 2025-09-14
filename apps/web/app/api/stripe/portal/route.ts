@@ -1,3 +1,4 @@
+// apps/web/app/api/stripe/portal/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/auth";
@@ -12,7 +13,7 @@ export async function POST(_req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const stripe = getStripe(); // lazy init at runtime
+  const stripe = getStripe();
 
   const customers = await stripe.customers.list({ email: session.user.email, limit: 1 });
   const customer = customers.data[0];
@@ -27,3 +28,4 @@ export async function POST(_req: NextRequest) {
 
   return NextResponse.json({ url: portal.url });
 }
+

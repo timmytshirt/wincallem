@@ -1,7 +1,7 @@
 // apps/web/app/api/stripe/webhook/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { PrismaClient } from "@prisma/client";
-import { getStripe } from "@/lib/stripe";   // ✅ lazy init
+import { getStripe } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,7 +17,7 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
-  const stripe = getStripe(); // ✅ construct only at runtime
+  const stripe = getStripe();
 
   let event;
   try {
@@ -45,7 +45,7 @@ export async function POST(req: NextRequest) {
             status: "active",
           },
           create: {
-            userId: "pending", // backfill later via email link
+            userId: "pending", // backfill later
             stripeCustomerId: customerId,
             stripeSubscriptionId: subscriptionId,
             priceId,
@@ -78,7 +78,7 @@ export async function POST(req: NextRequest) {
             },
           })
           .catch(async () => {
-            // If not found, create
+            // if not found, create
             await prisma.subscription.create({
               data: {
                 userId: "pending",

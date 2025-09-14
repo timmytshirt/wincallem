@@ -1,3 +1,4 @@
+// apps/web/app/api/stripe/checkout/route.ts
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/auth";
@@ -14,7 +15,7 @@ export async function POST(req: NextRequest) {
   const priceId = plan === "pro" ? process.env.STRIPE_PRICE_ID_PRO : process.env.STRIPE_PRICE_ID_STARTER;
   if (!priceId) return NextResponse.json({ error: "Missing price id" }, { status: 400 });
 
-  const stripe = getStripe(); // <- lazy init here
+  const stripe = getStripe();
 
   const customers = await stripe.customers.list({ email: session.user.email, limit: 1 });
   const customer = customers.data[0] ?? (await stripe.customers.create({ email: session.user.email }));
