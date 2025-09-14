@@ -1,5 +1,7 @@
+// apps/web/components/AuthButtons.tsx
 "use client";
-import { signIn, signOut, useSession } from "next-auth/react";
+import Link from "next/link";
+import { useSession, signOut } from "next-auth/react";
 
 export default function AuthButtons() {
   const { data: s } = useSession();
@@ -11,8 +13,8 @@ export default function AuthButtons() {
       </button>
     </div>
   ) : (
-    <button onClick={() => signIn("email")} className="px-2 py-1 text-xs bg-blue-600 text-white rounded">
+    <Link href="/api/auth/signin" className="px-2 py-1 text-xs bg-blue-600 text-white rounded">
       Login
-    </button>
+    </Link>
   );
 }
