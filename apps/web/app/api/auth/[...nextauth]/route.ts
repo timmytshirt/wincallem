@@ -19,7 +19,6 @@ const authOptions: NextAuthOptions = {
   debug: process.env.NEXTAUTH_DEBUG === "true",
   session: { strategy: "jwt" },
   adapter: PrismaAdapter(prisma),
-  trustHost: true,
 
   logger: {
     error(code, metadata) {
