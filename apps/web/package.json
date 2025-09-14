@@ -32,6 +32,7 @@
   },
   "devDependencies": {
     "@prisma/client": "^6.15.0",
+    "@types/nodemailer": "^6.4.19",
     "dotenv": "^17.2.2",
     "eslint": "^8.57.0",
     "eslint-config-next": "14.2.5",
