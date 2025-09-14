@@ -1,13 +1,11 @@
 // apps/web/app/api/stripe/checkout/route.ts
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/app/lib/auth";
+import { getStripe, siteUrl } from "@/lib/stripe";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, { apiVersion: "2024-06-20" });
 
 function normalizePriceId(raw?: string) {
   if (!raw) return "";
@@ -18,74 +16,44 @@ function normalizePriceId(raw?: string) {
 function pickPriceId(input: { priceId?: string; plan?: string }) {
   const fromBody = normalizePriceId(input.priceId);
   if (fromBody) return fromBody;
-
   if (input.plan === "starter") return normalizePriceId(process.env.STRIPE_PRICE_ID_STARTER);
   if (input.plan === "pro") return normalizePriceId(process.env.STRIPE_PRICE_ID_PRO);
   return "";
 }
 
-function siteUrl() {
-  // Prefer public site URL; fall back to NEXTAUTH_URL; then localhost
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL?.replace(/\/+$/, "") ||
-    process.env.NEXTAUTH_URL?.replace(/\/+$/, "") ||
-    "http://localhost:3000"
-  );
-}
-
 export async function POST(req: NextRequest) {
-  try {
-    const body = (await req.json().catch(() => ({}))) as {
-      priceId?: string;
-      plan?: "starter" | "pro" | string;
-      successUrl?: string;
-      cancelUrl?: string;
-    };
+  const body = (await req.json().catch(() => ({}))) as {
+    priceId?: string;
+    plan?: "starter" | "pro" | string;
+    successUrl?: string;
+    cancelUrl?: string;
+  };
 
-    const priceId = pickPriceId(body || {});
-    if (!priceId) {
-      return NextResponse.json({ error: "Missing or invalid priceId/plan" }, { status: 400 });
-    }
+  const priceId = pickPriceId(body || {});
+  if (!priceId) return NextResponse.json({ error: "Missing or invalid priceId/plan" }, { status: 400 });
 
-    // Build URLs and include session_id so /account (or your sync) can look up the session if needed
-    const success = (body?.successUrl || `${siteUrl()}/account`) + `?success=1&session_id={CHECKOUT_SESSION_ID}`;
-    const cancel = (body?.cancelUrl || `${siteUrl()}/account`) + `?canceled=1`;
+  const session = await getServerSession(authOptions);
+  if (!session?.user?.email) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
-    // Identify the current user (useful for tying Stripe customer to your user)
-    const sessionAuth = await getServerSession(authOptions);
-    const user = sessionAuth?.user as any;
-    const userId = (user?.id as string | undefined) || (sessionAuth as any)?.uid;
-    const email = (user?.email as string | undefined)?.toLowerCase();
+  const userId = (session as any).uid || (session.user as any).id;
+  const email = session.user.email.toLowerCase();
 
-    // Create (or reuse) a Checkout Session
-    const checkout = await stripe.checkout.sessions.create({
-      mode: "subscription",
-      line_items: [{ price: priceId, quantity: 1 }],
-      allow_promotion_codes: true,
+  const stripe = getStripe();
 
-      // Signal who initiated this checkout
-      client_reference_id: userId,
-      customer_email: email,
+  const success = (body?.successUrl || `${siteUrl()}/account`) + `?success=1&session_id={CHECKOUT_SESSION_ID}`;
+  const cancel  = (body?.cancelUrl  || `${siteUrl()}/account`) + `?canceled=1`;
 
-      // Make the chosen plan discoverable in the webhook without extra lookups
-      metadata: {
-        userId: userId ?? "",
-        email: email ?? "",
-        plan: (body?.plan || (priceId.includes("pro") ? "pro" : "starter")) as string,
-        priceId,
-        from: "wincallem-web",
-      },
+  const checkout = await stripe.checkout.sessions.create({
+    mode: "subscription",
+    line_items: [{ price: priceId, quantity: 1 }],
+    allow_promotion_codes: true,
+    client_reference_id: userId,
+    customer_email: email,
+    metadata: { userId: userId ?? "", email: email ?? "", priceId, plan: (body?.plan || (priceId.includes("pro") ? "pro" : "starter")) as string, from: "wincallem-web" },
+    expand: ["line_items.data.price", "subscription"],
+    success_url: success,
+    cancel_url: cancel,
+  });
 
-      // Bring line_items/price (and subscription) back on the session for webhooks
-      expand: ["line_items.data.price", "subscription"],
-
-      success_url: success,
-      cancel_url: cancel,
-    });
-
-    return NextResponse.json({ url: checkout.url }, { status: 200 });
-  } catch (err: any) {
-    console.error("checkout error:", err?.message || err);
-    return NextResponse.json({ error: err?.message || "Checkout failed" }, { status: 500 });
-  }
+  return NextResponse.json({ url: checkout.url }, { status: 200 });
 }
