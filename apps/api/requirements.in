@@ -1,6 +1,5 @@
-# requirements.in
-fastapi>=0.115.0,<0.116
-uvicorn[standard]>=0.30,<0.31
+﻿fastapi>=0.115,<0.116
+uvicorn>=0.30,<0.31
 pydantic>=2.9,<2.10
 python-dotenv>=1.0,<2.0
 celery>=5.4,<5.5
