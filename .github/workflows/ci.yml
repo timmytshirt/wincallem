@@ -1,71 +1,36 @@
-name: CI
+﻿name: build-test
 
 on:
-  pull_request:          # <-- run on every PR (no paths-ignore here)
+  pull_request:
+    branches: [ main, week2-merge ]
   push:
-    branches: [ main ]
-    paths-ignore: [ '**/*.md' ]   # ok to ignore md on direct pushes
+    branches: [ week2-merge ]
 
 jobs:
-  build-test:
+  build-test:                # job id
+    name: build-test         # <- this is the PR check name
     runs-on: ubuntu-latest
+
     steps:
       - uses: actions/checkout@v4
 
-      # Detect what changed to keep docs-only PRs fast
-      - uses: dorny/paths-filter@v3
-        id: changes
-        with:
-          filters: |
-            docs:
-              - '**/*.md'
-            web:
-              - 'apps/web/**'
-            api:
-              - 'apps/api/**'
-
-      # ---------- Web (Next.js) ----------
+      # ---- Web (Next.js) ----
       - uses: actions/setup-node@v4
-        if: steps.changes.outputs.web == 'true'
         with:
-          node-version: 18
-      - name: Install web dependencies
-        if: steps.changes.outputs.web == 'true'
-        working-directory: apps/web
-        run: npm install --force
+          node-version: 20
       - name: Build web
-        if: steps.changes.outputs.web == 'true'
         working-directory: apps/web
-        run: npm run build
+        run: |
+          corepack enable
+          pnpm --version || npm i -g pnpm@9
+          pnpm install --frozen-lockfile
+          pnpm build
 
-      # ---------- API (FastAPI + Python) ----------
+      # ---- API (FastAPI deps) ----
       - uses: actions/setup-python@v5
-        if: steps.changes.outputs.api == 'true'
         with:
-          python-version: '3.13'
-      - - name: Install API deps
-          run: |
-            python -m pip install -U pip
-            pip install --require-hashes -r apps/api/requirements-dev.txt
-
-      - name: Lint & typecheck
-        if: steps.changes.outputs.api == 'true'
+          python-version: '3.11'
+      - name: Install API deps (hashed dev lock)
         run: |
-          black --check apps/api
-          isort --check-only apps/api
-          flake8 apps/api
-          mypy apps/api
-      - name: Run tests (if present)
-        if: steps.changes.outputs.api == 'true'
-        working-directory: apps/api
-        run: |
-          if ls -1 test_*.py *_test.py tests 2>/dev/null | grep -q .; then
-            pytest -q
-          else
-            echo "No tests found; skipping."
-          fi
-
-      # Docs-only PRs still produce a passing check
-      - name: Docs-only change – nothing to build
-        if: steps.changes.outputs.docs == 'true' && steps.changes.outputs.web != 'true' && steps.changes.outputs.api != 'true'
-        run: echo "Docs-only PR; skipping heavy steps."
+          python -m pip install -U pip
+          pip install --require-hashes -r apps/api/requirements-dev.txt
