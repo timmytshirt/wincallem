@@ -1,25 +1,12 @@
-# Normalize line endings for cross-platform dev
-* text=auto
+# .gitattributes (repo root)
+* text=auto eol=lf
 
-# Force LF endings for source/config files
+*.ts   text eol=lf
+*.tsx  text eol=lf
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.json text eol=lf
+*.prisma text eol=lf
 *.py   text eol=lf
-*.sh   text eol=lf
-*.yml  text eol=lf
-*.yaml text eol=lf
-*.md   text eol=lf
 
-# Leave binaries untouched
-*.png  binary
-*.jpg  binary
-*.jpeg binary
-*.gif  binary
-*.ico  binary
-*.pdf  binary
-*.docx binary
-*.xlsx binary
-
-# Keep Windows endings only for Windows scripts
-*.bat text eol=crlf
-*.cmd text eol=crlf
-*.ps1 text eol=crlf
 
