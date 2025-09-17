@@ -1,49 +1,19 @@
-// Minimal, DB-free NextAuth config (Credentials provider only)
-// Dev-only: login with fixed email/password from env.
-
-import type { NextAuthOptions } from "next-auth";
-import Credentials from "next-auth/providers/credentials";
-
-const DEV_EMAIL = process.env.DEV_LOGIN_EMAIL || "dev@wincallem.local";
-const DEV_PASSWORD = process.env.DEV_LOGIN_PASSWORD || "letmein";
+import type { NextAuthOptions } from 'next-auth'
+import { PrismaAdapter } from '@auth/prisma-adapter'
+import EmailProvider from 'next-auth/providers/email'
+import { prisma } from './prisma'
 
 export const authOptions: NextAuthOptions = {
+  adapter: PrismaAdapter(prisma),
   providers: [
-    Credentials({
-      name: "Dev Credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
-      },
-      async authorize(creds) {
-        const email = (creds?.email || "").toString().toLowerCase();
-        const password = (creds?.password || "").toString();
-        if (email === DEV_EMAIL.toLowerCase() && password === DEV_PASSWORD) {
-          return { id: "dev-user", name: "Developer", email: DEV_EMAIL };
-        }
-        return null;
-      },
+    EmailProvider({
+      server: process.env.EMAIL_SERVER,
+      from: process.env.EMAIL_FROM,
+      maxAge: 60 * 60, // 1h magic links
     }),
   ],
-  session: { strategy: "jwt" },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        token.email = user.email;
-        token.name = user.name;
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      if (token?.email) {
-        session.user = {
-          ...session.user,
-          email: token.email,
-          name: token.name ?? null,
-        } as any;
-      }
-      return session;
-    },
-  },
+  session: { strategy: 'database' }, // uses Session table in your schema
+  debug: process.env.NEXTAUTH_DEBUG === 'true',
   secret: process.env.NEXTAUTH_SECRET,
-};
+}
+

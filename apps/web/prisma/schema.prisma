@@ -4,15 +4,14 @@ generator client {
 
 datasource db {
   provider  = "postgresql"
-  url       = env("DATABASE_URL")          // pooled @ Neon (pgbouncer=true)
-  directUrl = env("DIRECT_DATABASE_URL")   // direct for migrate/studio
+  url       = env("DATABASE_URL") // pooled @ Neon (pgbouncer=true)
+  directUrl = env("DIRECT_DATABASE_URL") // direct for migrate/studio
 }
 
-
 model User {
-  id            String   @id @default(cuid())
+  id            String         @id @default(cuid())
   name          String?
-  email         String?  @unique
+  email         String?        @unique
   emailVerified DateTime?
   image         String?
   accounts      Account[]
@@ -55,19 +54,19 @@ model VerificationToken {
 }
 
 model Subscription {
-  id                    String   @id @default(cuid())
-  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId                String
-  stripeCustomerId      String   @unique
-  stripeSubscriptionId  String?  @unique
-  priceId               String?
-  plan                  String?  // e.g. "starter" | "pro"
-  status                String   // "trialing" | "active" | "past_due" | "canceled" | "incomplete" | ...
-  currentPeriodEnd      DateTime?
-  cancelAt              DateTime?
-  canceledAt            DateTime?
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
+  id                   String    @id @default(cuid())
+  user                 User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId               String
+  stripeCustomerId     String    @unique
+  stripeSubscriptionId String?   @unique
+  priceId              String?
+  plan                 String? // e.g. "starter" | "pro"
+  status               String // "trialing" | "active" | "past_due" | "canceled" | "incomplete" | ...
+  currentPeriodEnd     DateTime?
+  cancelAt             DateTime?
+  canceledAt           DateTime?
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
 
   @@index([userId, status])
 }
