@@ -3,14 +3,11 @@
   [switch]$Strict
 )
 
+# Be reasonably chatty (fail fast in -Strict; otherwise log paths at end)
 $ErrorActionPreference = "SilentlyContinue"
 
-function ReadText($p) {
-  if (Test-Path $p) { return Get-Content -Raw $p } else { return "" }
-}
-function Get-Version($exe, $args=@()) {
-  try { return (& $exe @args) } catch { return $null }
-}
+function ReadText($p) { if (Test-Path $p) { Get-Content -Raw $p } else { "" } }
+function Get-Version($exe, $args=@()) { try { & $exe @args } catch { $null } }
 
 # --- paths & dates ---
 $root    = (Get-Location).Path
@@ -48,18 +45,6 @@ $schemaText = ReadText $schemaPath
 $dbProvider = ""
 if ($schemaText -match 'provider\s*=\s*"(.*?)"') { $dbProvider = $matches[1] }
 
-$webEnvPath = Join-Path $root "apps/web/.env.local"
-$webEnv = @{}
-if (Test-Path $webEnvPath) {
-  $t = Get-Content -Raw $webEnvPath
-  foreach ($k in @(
-    "NEXT_PUBLIC_API_URL","NEXTAUTH_URL","NEXTAUTH_SECRET","EMAIL_SERVER","EMAIL_FROM",
-    "DATABASE_URL","DIRECT_DATABASE_URL","STRIPE_SECRET_KEY","NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
-  )) {
-    if ($t -match ("(?m)^\s*"+[regex]::Escape($k)+"=")) { $webEnv[$k] = "present" } else { $webEnv[$k] = "missing" }
-  }
-}
-
 $nextCfgPath = Join-Path $root "apps/web/next.config.js"
 $nextCfg     = ReadText $nextCfgPath
 $proxiesAuth = $false; if ($nextCfg -match "(?ms)rewrites\s*:\s*.*?/api/auth") { $proxiesAuth = $true }
@@ -74,7 +59,7 @@ $misaligned = $false
 if ($dbProvider -ne "" -and $dbProvider -ne "postgresql") { $misaligned = $true }
 if ($proxiesAuth) { $misaligned  = $true }
 
-# --- latest change summary (WHY/WHAT/files) ---
+# --- latest change summary (WHY/WHAT/files) from per-commit log JSON if present; else fallback to last commit
 $latestChange = $null
 $logRoot = Join-Path $docs "file_change_log"
 if (Test-Path $logRoot) {
@@ -87,7 +72,6 @@ if (Test-Path $logRoot) {
     }
   }
 }
-
 $whyText  = ""
 $whatText = ""
 $filesList = @()
@@ -95,7 +79,7 @@ if ($latestChange) {
   $whyText  = $latestChange.why
   $whatText = $latestChange.what
   if ($latestChange.files) {
-    foreach ($f in $latestChange.files) { $filesList += "$($f.status) $($f.path)" }
+    foreach ($f in $latestChange.files) { $filesList += ("{0} {1}" -f $f.status, $f.path) }
   }
 } else {
   $body = (git log -1 --pretty=%B)
@@ -106,11 +90,78 @@ if ($latestChange) {
 if (-not $whyText)  { $whyText  = "_(not provided)_" }
 if (-not $whatText) { $whatText = "_(not provided)_" }
 
-# --- HANDOFF.md ---
-$handoffPath = Join-Path $docs "HANDOFF.md"
+# --- branch diff vs origin/main (commits/files/shortstat + top lists)
+$base  = (git merge-base origin/main HEAD).Trim()
+$range = "$base..HEAD"
+$commitCount = [int](git rev-list $range --count)
+$commitLines = (git log --pretty=format:'- %h — %s' $range -n 10) -join "`n"
+$filesRaw    = @(git diff --name-status $range)
+$filesCount  = $filesRaw.Count
+$shortstat   = (git diff --shortstat $range) -join ' '
+$filesShown  = ($filesRaw | Select-Object -First 12) -join "`n  "
+
+# --- environment presence
+$webEnvPath = Join-Path $root "apps/web/.env.local"
+$webEnv = @{}
+if (Test-Path $webEnvPath) {
+  $t = Get-Content -Raw $webEnvPath
+  foreach ($k in @(
+    "NEXT_PUBLIC_API_URL","NEXTAUTH_URL","NEXTAUTH_SECRET","EMAIL_SERVER","EMAIL_FROM",
+    "DATABASE_URL","DIRECT_DATABASE_URL","STRIPE_SECRET_KEY","NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY"
+  )) {
+    if ($t -match ("(?m)^\s*"+[regex]::Escape($k)+"=")) { $webEnv[$k] = "present" } else { $webEnv[$k] = "missing" }
+  }
+}
 $envLines = @()
 foreach ($kv in $webEnv.GetEnumerator()) { $envLines += ("  - {0}: {1}" -f $kv.Key, $kv.Value) }
 $envLines = ($envLines -join "`n")
+
+# --- PRs in this session (via gh CLI) ---
+$prBlock = ""
+if (Get-Command gh -ErrorAction SilentlyContinue) {
+  try {
+    # get a reasonable recent set and filter
+    $branchesWanted = @($branch,'feature/handoff-clean','chore/handoff-replacement','chore/handoff-enhanced')
+    $prs = gh pr list --state all --json number,title,body,url,headRefName,baseRefName,updatedAt --limit 50 | ConvertFrom-Json
+    $cutoff = (Get-Date).Date  # today
+    $wanted = @()
+
+    if ($prs) {
+      $byHead = $prs | Where-Object { $branchesWanted -contains $_.headRefName }
+      foreach ($p in $byHead) { $wanted += $p }
+
+      $todayPRs = $prs | Where-Object { [DateTime]$_.updatedAt -ge $cutoff } | Sort-Object updatedAt -Descending
+      foreach ($p in $todayPRs) { $wanted += $p }
+
+      # dedupe by PR number, keep order
+      $seen = @{}
+      $dedup = @()
+      foreach ($p in $wanted) {
+        if (-not $seen.ContainsKey($p.number)) { $seen[$p.number] = $true; $dedup += $p }
+      }
+
+      $wanted = $dedup | Select-Object -First 3
+      if ($wanted.Count -gt 0) {
+        $lines = @("prs in this session:")
+        foreach ($pr in $wanted) {
+          $body = ""; if ($pr.body) { $body = ($pr.body -replace "(`r`n|`n|`r)","`n> ") }
+          $lines += ("- #{0}: {1}  [{2} → {3}]" -f $pr.number, $pr.title, $pr.headRefName, $pr.baseRefName)
+          $lines += ("  url: {0}" -f $pr.url)
+          if ($body -ne "") { $lines += "  notes:"; $lines += ("> " + $body) }
+          $lines += ""
+        }
+        $prBlock = ($lines -join "`n")
+      }
+    }
+  } catch {
+    $prBlock = "prs in this session:\n- (gh CLI error — paste PR notes manually)"
+  }
+} else {
+  $prBlock = "prs in this session:\n- (Install GitHub CLI `gh` to auto pull PR notes, or paste notes here)"
+}
+
+# --- HANDOFF.md ---
+$handoffPath = Join-Path $docs "HANDOFF.md"
 $filesPreview = if ($filesList.Count -gt 0) { ($filesList | Select-Object -First 6) -join "`n  " } else { "(no files listed)" }
 
 $handoff = @"
@@ -128,6 +179,17 @@ $handoff = @"
   $filesPreview
   $(if ($filesList.Count -gt 6) { "...(more)" } else { "" })
 
+## Branch Diff vs origin/main
+- commits: $commitCount
+- files:   $filesCount
+- stats:   $shortstat
+
+### recent commits (top 10)
+$commitLines
+
+### files changed (top 12)
+  $filesShown
+
 ## Stack & Alignment
 | Component | Verdict |
 |---|---|
@@ -139,6 +201,9 @@ $handoff = @"
 ## Environment (presence only)
 - apps/web/.env.local:
 $envLines
+
+## PR Notes
+$prBlock
 
 ## Commands
 **Web**
@@ -164,15 +229,15 @@ $logEntry = @"
 Add-Content -Path $sessionPath -Value $logEntry
 
 # --- summary block (for next chat) ---
-$whyOneLine  = ($whyText -replace "\r?\n"," ") -replace "\s+"," "
-$whatOneLine = ($whatText -replace "\r?\n"," ") -replace "\s+"," "
+$whyOneLine  = ($whyText -replace "(`r`n|`n|`r)"," ") -replace "\s+"," "
+$whatOneLine = ($whatText -replace "(`r`n|`n|`r)"," ") -replace "\s+"," "
 $filesOneLine = if ($filesList.Count -gt 0) { ($filesList | Select-Object -First 3) -join " · " } else { "(none)" }
 
 $summary = @"
 === HANDOFF SUMMARY ===
 PLAYBOOK: docs/PLAYBOOK.md (v1.0) — tiny PRs · squash-only · DoR/DoD · stubs · stack checks · handoff required
 branch: $branch @ $shaShort — $subject
-status: $dirty ($changed files)
+status: branch diff vs main → commits=$commitCount, files=$filesCount, $shortstat
 
 latest change:
   why:  $whyOneLine
@@ -182,6 +247,8 @@ latest change:
 commands:
   web: cd apps/web && pnpm dev
   api: cd apps/api && .\.venv\Scripts\Activate.ps1; uvicorn main:app --reload --port 8000
+
+$prBlock
 
 artifacts: $art
 =======================
@@ -201,8 +268,5 @@ if ($Strict) {
   }
 }
 
-Write-Host "Handoff updated:"
-Write-Host " - $handoffPath"
-Write-Host " - $sessionPath"
-Write-Host " - $sumPath"
-
+Write-Host ">> Handoff written: $handoffPath"
+Write-Host ">> Summary written: $sumPath"
