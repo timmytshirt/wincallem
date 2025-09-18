@@ -1,8 +1,10 @@
 ﻿param(
   [string]$TaskId = "general",
   [switch]$Strict,
-  [switch]$Minimal
+  [switch]$Minimal,
+  [switch]$NoPRs
 )
+
 
 # Quiet errors by default; script prints paths on success
 $ErrorActionPreference = "SilentlyContinue"
