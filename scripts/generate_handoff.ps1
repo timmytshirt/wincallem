@@ -69,12 +69,14 @@ $blockersLine = "none"; if ($blockers.Count -gt 0) { $blockersLine = ($blockers 
 
 # One relevant PR (current branch if available) via GitHub CLI
 $prLine = ""
-if (Get-Command gh -ErrorAction SilentlyContinue) {
+if (-not $NoPRs -and (Get-Command gh -ErrorAction SilentlyContinue)) {
   try {
-    $prInfo = gh pr list --head $branch --state all --json number,title,url | ConvertFrom-Json | Select-Object -First 1
+    $prInfo = gh pr list --head $branch --state all --json number,title,url |
+              ConvertFrom-Json | Select-Object -First 1
     if ($prInfo) { $prLine = ("#{0}: {1} — {2}" -f $prInfo.number, $prInfo.title, $prInfo.url) }
   } catch { }
 }
+
 # === end minimal helpers ===
 
 # --- latest change summary (WHY/WHAT/FILES) ---
@@ -146,7 +148,7 @@ $envLines = ($envLines -join "`n")
 
 # --- PRs in this session (via gh CLI) ---
 $prBlock = ""
-if (Get-Command gh -ErrorAction SilentlyContinue) {
+if (-not $NoPRs -and (Get-Command gh -ErrorAction SilentlyContinue)) {
   try {
     $branchesWanted = @($branch,'feature/handoff-clean','chore/handoff-replacement','chore/handoff-enhanced')
     $prs = gh pr list --state all --json number,title,body,url,headRefName,baseRefName,updatedAt --limit 50 | ConvertFrom-Json
@@ -154,24 +156,19 @@ if (Get-Command gh -ErrorAction SilentlyContinue) {
     $wanted = @()
 
     if ($prs) {
-      $byHead = $prs | Where-Object { $branchesWanted -contains $_.headRefName }
-      foreach ($p in $byHead) { $wanted += $p }
-
+      $byHead   = $prs | Where-Object { $branchesWanted -contains $_.headRefName }
       $todayPRs = $prs | Where-Object { [DateTime]$_.updatedAt -ge $cutoff } | Sort-Object updatedAt -Descending
-      foreach ($p in $todayPRs) { $wanted += $p }
+      $wanted  += $byHead + $todayPRs
 
-      # dedupe by PR number, keep order
-      $seen = @{}; $dedup = @()
-      foreach ($p in $wanted) {
-        if (-not $seen.ContainsKey($p.number)) { $seen[$p.number] = $true; $dedup += $p }
-      }
+      $seen=@{}; $dedup=@()
+      foreach ($p in $wanted) { if (-not $seen.ContainsKey($p.number)) { $seen[$p.number]=$true; $dedup+=$p } }
       $wanted = $dedup | Select-Object -First 3
 
       if ($wanted.Count -gt 0) {
         $lines = @("prs in this session:")
         foreach ($pr in $wanted) {
-          $body = ""; if ($pr.body) { $body = ($pr.body -replace "(`r`n|`n|`r)","`n> ") }
-          $lines += ("- #{0}: {1}  [{2} -> {3}]" -f $pr.number, $pr.title, $pr.headRefName, $pr.baseRefName)
+          $body = if ($pr.body) { ($pr.body -replace "(`r`n|`n|`r)","`n> ") } else { "" }
+          $lines += ("- #{0}: {1}  [{2} -> {3}]" -f $pr.number,$pr.title,$pr.headRefName,$pr.baseRefName)
           $lines += ("  url: {0}" -f $pr.url)
           if ($body -ne "") { $lines += "  notes:"; $lines += ("> " + $body) }
           $lines += ""
@@ -183,8 +180,9 @@ if (Get-Command gh -ErrorAction SilentlyContinue) {
     $prBlock = "prs in this session:`n- (gh CLI error - paste PR notes manually)"
   }
 } else {
-  $prBlock = "prs in this session:`n- (Install GitHub CLI 'gh' to auto pull PR notes, or paste notes here)"
+  $prBlock = "prs in this session:`n- (PR lookups skipped)"
 }
+
 
 # --- HANDOFF.md ---
 $handoffPath = Join-Path $docs "HANDOFF.md"
@@ -313,4 +311,6 @@ if ($Strict) {
 
 Write-Host ">> Handoff written: $handoffPath"
 Write-Host ">> Summary written: $sumPath"
+Write-Host "`n--- paste this in the next chat ---`n$summary`n--- end ---"
+
 
